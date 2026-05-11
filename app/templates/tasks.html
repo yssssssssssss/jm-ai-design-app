@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section
+  class="panel"
+  data-task-list="{{ task_mode }}"
+  data-task-count="{{ tasks|length }}"
+>
+  {% if tasks %}
+    <div class="task-list">
+      {% for task in tasks %}
+        <article class="task-row">
+          <div class="task-main">
+            {% if task_mode == "history" and task.report_path %}
+              <a class="task-title" href="/tasks/{{ task.id }}/report.html">
+                {% if task.id in unread_task_ids %}
+                  <span class="unread-dot" aria-label="新报告"></span>
+                {% endif %}
+                {{ task.title }}
+              </a>
+            {% else %}
+              <a class="task-title" href="/tasks/{{ task.id }}">{{ task.title }}</a>
+            {% endif %}
+            <div class="task-submeta">
+              <span>提交人：{{ task.owner_username or task.owner_id }}</span>
+              <span>图片：{{ task.image_count }}</span>
+              <span>创建：{{ task.created_at or "-" }}</span>
+            </div>
+          </div>
+          <div class="task-side">
+            <span class="status status-{{ task.status }}">{{ task.status }}</span>
+            {% if task_mode == "running" %}
+              <a class="text-action" href="/tasks/{{ task.id }}">查看进度</a>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty-state">
+      {% if task_mode == "running" %}
+        暂无正在分析的任务。
+      {% else %}
+        暂无已完成的成功任务。
+      {% endif %}
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

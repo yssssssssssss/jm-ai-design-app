@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel auth-panel">
+  <h1>注册</h1>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+  <form action="/register" method="post" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+      用户名
+      <input name="username" type="text" autocomplete="username" minlength="3" required>
+    </label>
+    <label>
+      密码
+      <input name="password" type="password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <label>
+      邀请码
+      <input name="invite_code" type="text" autocomplete="off" required>
+    </label>
+    <button type="submit">注册</button>
+  </form>
+</section>
+{% endblock %}

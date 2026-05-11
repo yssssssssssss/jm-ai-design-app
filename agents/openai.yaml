@@ -1,0 +1,4 @@
+interface:
+  display_name: "JM AI Design App"
+  short_description: "审核 JM AI 图片设计稿规范一致性"
+  default_prompt: "Use $jm-ai-design-app to audit this uploaded UI mockup against the JM AI design specs, then generate a Chinese review summary, an HTML report, and annotated issue screenshots."

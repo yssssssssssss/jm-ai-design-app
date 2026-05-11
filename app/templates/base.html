@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title or "AI设计规范审核" }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v=20260508-9">
+</head>
+<body>
+  {% if user %}
+    <div class="app-shell">
+    <aside class="sidebar" aria-label="应用导航">
+      <div class="sidebar-top">
+        <a class="brand" href="/">AI设计规范审核</a>
+        <a class="new-task-shortcut {{ 'is-active' if nav_active == 'new' else '' }}" href="/">新建任务</a>
+      </div>
+      <nav class="side-nav" aria-label="任务导航">
+        <a class="side-nav-item {{ 'is-active' if nav_active == 'running' else '' }}" href="/tasks/running">正在进行</a>
+        <a class="side-nav-item {{ 'is-active' if nav_active == 'history' else '' }}" href="/tasks">
+          历史任务{% if has_history_updates %}<span class="nav-dot" aria-label="有新增历史任务"></span>{% endif %}
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="account-card">
+          <span class="avatar">{{ user.username[:1]|upper }}</span>
+          <span class="account-name">{{ user.username }}</span>
+        </div>
+        {% if user.is_admin %}
+          <a class="side-nav-item admin-link" href="/admin/users">用户管理</a>
+        {% endif %}
+        <form action="/logout" method="post" class="logout-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit">退出登录</button>
+        </form>
+      </div>
+    </aside>
+  {% else %}
+    <header class="site-header">
+      <a class="brand" href="/">AI设计规范审核</a>
+      <nav class="nav">
+        <a href="/login">登录</a>
+        <a href="/register">注册</a>
+      </nav>
+    </header>
+  {% endif %}
+  <main class="page {{ 'page-public' if not user else '' }} {{ 'page-' ~ nav_active if nav_active else '' }}">
+    {% if title and not hide_page_title %}
+      <h1 class="page-title">{{ title }}</h1>
+    {% endif %}
+    {% if lead %}
+      <p class="lead">{{ lead }}</p>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% if user %}
+    </div>
+  {% endif %}
+</body>
+</html>

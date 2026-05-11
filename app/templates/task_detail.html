@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel" data-task-id="{{ task.id }}">
+  <p class="page-action">
+    <a href="{{ '/tasks/running' if task.status in ['queued', 'running'] else '/tasks' }}">
+      返回{{ "正在进行" if task.status in ["queued", "running"] else "历史任务" }}
+    </a>
+  </p>
+  <dl class="task-meta">
+    <div>
+      <dt>状态</dt>
+      <dd><span id="task-status" class="status status-{{ task.status }}">{{ task.status }}</span></dd>
+    </div>
+    <div>
+      <dt>图片数</dt>
+      <dd>{{ task.image_count }}</dd>
+    </div>
+    <div>
+      <dt>截图尺寸</dt>
+      <dd>
+        {% if task.screen_width_px and task.screen_height_px %}
+          {{ task.screen_width_px }} × {{ task.screen_height_px }} px
+        {% else %}
+          未填写
+        {% endif %}
+      </dd>
+    </div>
+    <div>
+      <dt>提交人</dt>
+      <dd>{{ task.owner_username or task.owner_id }}</dd>
+    </div>
+    <div>
+      <dt>创建时间</dt>
+      <dd>{{ task.created_at or "-" }}</dd>
+    </div>
+  </dl>
+  {% if task.summary %}
+    <p>{{ task.summary }}</p>
+  {% endif %}
+  {% if task.error_message %}
+    <p class="error">{{ task.error_message }}</p>
+  {% endif %}
+  {% if task.report_path %}
+    <p><a href="/tasks/{{ task.id }}/report.html">查看 HTML 报告</a></p>
+  {% endif %}
+
+  <h2>图片</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>文件</th>
+          <th>状态</th>
+          <th>错误</th>
+        </tr>
+      </thead>
+      <tbody id="image-statuses">
+        {% for image in images %}
+          <tr>
+            <td>{{ image.filename }}</td>
+            <td><span class="status status-{{ image.status }}">{{ image.status }}</span></td>
+            <td>{{ image.error_message or "-" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<script src="/static/app.js"></script>
+{% endblock %}

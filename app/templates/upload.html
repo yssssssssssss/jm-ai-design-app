@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="home-workspace">
+  <div class="home-copy">
+    <p class="eyebrow">AI Design Audit</p>
+    <h1>AI设计规范审核</h1>
+    <p>上传稿件，AI会按设计规范生成审核报告</p>
+  </div>
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <form class="audit-composer" method="post" action="/tasks" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="composer-title">
+      <span>任务标题</span>
+      <input name="title" required value="JM AI 设计审核" aria-label="任务标题">
+    </label>
+    <div class="upload-block">
+      <div class="upload-header">
+        <span class="upload-title">上传文件</span>
+      </div>
+      <div class="upload-zone" id="upload-dropzone">
+        <span class="upload-hint">支持拖拽上传。支持 PNG、JPG、JPEG、WebP，可一次上传多张。</span>
+        <input
+          id="upload-files"
+          name="files"
+          type="file"
+          accept=".png,.jpg,.jpeg,.webp"
+          multiple
+          required
+        >
+        <button class="file-picker-button" id="file-picker-button" type="button">选择文件</button>
+      </div>
+    </div>
+    <ul class="file-list" id="selected-files"></ul>
+    <div class="screen-size-block">
+      <span class="screen-size-title">稿件尺寸</span>
+      <div class="screen-size-grid">
+        <label>
+          <input
+            name="screen_width_px"
+            type="number"
+            min="1"
+            max="20000"
+            step="1"
+            inputmode="numeric"
+            placeholder="例如 1440px"
+            aria-label="稿件宽度 px"
+          >
+        </label>
+        <label>
+          <input
+            name="screen_height_px"
+            type="number"
+            min="1"
+            max="20000"
+            step="1"
+            inputmode="numeric"
+            placeholder="例如 900px"
+            aria-label="稿件高度 px"
+          >
+        </label>
+      </div>
+    </div>
+    <div class="composer-actions">
+      <span>任务提交后会出现在“正在进行”。完成后进入“历史任务”。</span>
+      <button type="submit">提交审核</button>
+    </div>
+  </form>
+</section>
+<script src="/static/app.js"></script>
+{% endblock %}

@@ -1,0 +1,10 @@
+.env
+.venv/
+data/
+data-dev/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+._*
+outpu/
