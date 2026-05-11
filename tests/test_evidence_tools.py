@@ -5,6 +5,7 @@ from PIL import Image
 from app.evidence_tools import (
     EvidenceToolError,
     build_issues_json,
+    filter_font_related_audit,
     run_annotations,
     run_color_analysis,
     run_measurements,
@@ -42,6 +43,38 @@ def test_build_issues_json_keeps_only_issues_with_bbox():
             "bbox": [1, 2, 3, 4],
         }
     ]
+
+
+def test_filter_font_related_audit_hides_font_review_items():
+    audit = {
+        "major_issues": ["字体偏小", "按钮颜色偏差"],
+        "passes": ["字号层级清晰", "主色正确"],
+        "issues": [
+            {"category": "字体", "current_observation": "字号偏小"},
+            {"category": "色彩", "current_observation": "按钮偏绿"},
+        ],
+        "checklist": [
+            {"item": "字体族", "status": "无法确认"},
+            {"item": "AI 主色", "status": "不通过"},
+        ],
+        "cannot_verify": [
+            {"item": "font family", "reason": "截图无法确认"},
+            {"item": "图标", "reason": "缺少原始资源"},
+        ],
+        "regions": [
+            {"id": "typography-01", "role_hint": "typography"},
+            {"id": "button-01", "role_hint": "component"},
+        ],
+    }
+
+    filtered = filter_font_related_audit(audit)
+
+    assert filtered["major_issues"] == ["按钮颜色偏差"]
+    assert filtered["passes"] == ["主色正确"]
+    assert filtered["issues"] == [{"category": "色彩", "current_observation": "按钮偏绿"}]
+    assert filtered["checklist"] == [{"item": "AI 主色", "status": "不通过"}]
+    assert filtered["cannot_verify"] == [{"item": "图标", "reason": "缺少原始资源"}]
+    assert filtered["regions"] == [{"id": "button-01", "role_hint": "component"}]
 
 
 def test_write_regions_json(tmp_path):
@@ -110,7 +143,8 @@ def test_run_measurements_creates_json_and_crops(tmp_path):
 
 def test_run_annotations_creates_annotated_image_and_crop(tmp_path):
     image = tmp_path / "input.png"
-    Image.new("RGB", (20, 20), color=(107, 54, 250)).save(image)
+    original_color = (107, 54, 250)
+    Image.new("RGB", (80, 80), color=original_color).save(image)
     issues = tmp_path / "issues.json"
     output_dir = tmp_path / "annotations"
     write_json(
@@ -121,7 +155,7 @@ def test_run_annotations_creates_annotated_image_and_crop(tmp_path):
                 "title": "颜色错误",
                 "severity": "中",
                 "category": "色彩",
-                "bbox": [2, 2, 10, 8],
+                "bbox": [20, 20, 40, 30],
             }
         ],
     )
@@ -130,3 +164,6 @@ def test_run_annotations_creates_annotated_image_and_crop(tmp_path):
 
     assert (output_dir / "annotated.png").exists()
     assert (output_dir / "issue-color-01.png").exists()
+    annotated = Image.open(output_dir / "annotated.png").convert("RGB")
+    assert annotated.getpixel((40, 35)) == original_color
+    assert annotated.getpixel((0, 0)) != original_color

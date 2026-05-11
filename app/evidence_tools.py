@@ -38,9 +38,64 @@ def _valid_bbox(value: Any) -> bool:
     )
 
 
+def _is_font_related(value: Any) -> bool:
+    text = str(value or "").lower()
+    return any(
+        token in text
+        for token in [
+            "字体",
+            "字号",
+            "字重",
+            "行高",
+            "文本",
+            "font",
+            "typography",
+            "type",
+            "text",
+        ]
+    )
+
+
+def is_font_related_item(item: dict[str, Any]) -> bool:
+    return any(
+        _is_font_related(item.get(key))
+        for key in [
+            "id",
+            "title",
+            "category",
+            "location",
+            "current_observation",
+            "spec_expectation",
+            "recommendation",
+            "item",
+            "reason",
+            "evidence",
+            "role_hint",
+            "measure_kind",
+        ]
+    )
+
+
+def filter_font_related_audit(audit: dict[str, Any]) -> dict[str, Any]:
+    filtered = dict(audit)
+    for key in ["major_issues", "passes"]:
+        filtered[key] = [
+            item for item in audit.get(key, []) if not _is_font_related(item)
+        ]
+    for key in ["issues", "checklist", "cannot_verify", "regions"]:
+        filtered[key] = [
+            item
+            for item in audit.get(key, [])
+            if not isinstance(item, dict) or not is_font_related_item(item)
+        ]
+    return filtered
+
+
 def build_issues_json(issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for issue in issues:
+        if is_font_related_item(issue):
+            continue
         bbox = issue.get("bbox")
         if not _valid_bbox(bbox):
             continue

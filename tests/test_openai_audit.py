@@ -35,6 +35,7 @@ def test_build_audit_prompt_includes_spec_rules():
     assert "SPEC TEXT" in prompt
     assert "JSON" in prompt
     assert "bbox" in prompt
+    assert "暂时不要审核字体相关问题" in prompt
 
 
 def test_build_audit_prompt_includes_declared_screen_size_context():

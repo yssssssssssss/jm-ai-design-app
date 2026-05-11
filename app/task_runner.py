@@ -10,6 +10,7 @@ from app.config import Settings
 from app.db import connect
 from app.evidence_tools import (
     build_issues_json,
+    filter_font_related_audit,
     run_annotations,
     run_color_analysis,
     run_measurements,
@@ -97,7 +98,7 @@ def run_task(
             image_artifacts.mkdir(parents=True, exist_ok=True)
 
             try:
-                audit = auditor(image_path)
+                audit = filter_font_related_audit(auditor(image_path))
                 audit_path = image_artifacts / "audit.json"
                 tokens_path = image_artifacts / "tokens.json"
                 regions_path = image_artifacts / "regions.json"

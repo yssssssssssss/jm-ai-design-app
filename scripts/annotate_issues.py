@@ -16,6 +16,8 @@ COLORS = {
     "中": (181, 71, 8),
     "低": (107, 114, 128),
 }
+MASK_COLOR = (15, 23, 42, 118)
+BORDER_WIDTH = 8
 
 
 def load_issues(path: Path) -> list[dict[str, Any]]:
@@ -70,8 +72,9 @@ def main() -> int:
 
     image = Image.open(image_path).convert("RGB")
     issues = load_issues(issues_path)
-    annotated = image.copy()
-    draw = ImageDraw.Draw(annotated)
+    annotated_rgba = image.convert("RGBA")
+    mask = Image.new("RGBA", image.size, MASK_COLOR)
+    annotated_rgba = Image.alpha_composite(annotated_rgba, mask)
 
     width, height = image.size
 
@@ -85,15 +88,20 @@ def main() -> int:
         w = max(1, min(w, width - x))
         h = max(1, min(h, height - y))
 
-        for offset in range(3):
-            draw.rectangle((x - offset, y - offset, x + w + offset, y + h + offset), outline=color)
+        annotated_rgba.paste(image.crop((x, y, x + w, y + h)), (x, y))
+        draw = ImageDraw.Draw(annotated_rgba)
+        for offset in range(BORDER_WIDTH):
+            draw.rectangle(
+                (x - offset, y - offset, x + w + offset, y + h + offset),
+                outline=color + (255,),
+            )
         draw_label(draw, (x, max(0, y - 22)), f"{index}. {issue_id}", color)
 
         crop_box = clamp_bbox([x, y, w, h], width, height)
         crop = image.crop(crop_box)
         crop.save(output_dir / f"issue-{issue_id}.png")
 
-    annotated.save(output_dir / "annotated.png")
+    annotated_rgba.convert("RGB").save(output_dir / "annotated.png")
     print(f"wrote {output_dir / 'annotated.png'}")
     print(f"wrote {len(issues)} issue crop(s)")
     return 0

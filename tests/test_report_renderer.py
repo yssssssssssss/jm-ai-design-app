@@ -46,6 +46,8 @@ def test_render_report_html_escapes_user_text_and_includes_image_sections():
     assert "审核综述" in html
     assert "AI 主色" in html
     assert "artifacts/image-001/annotated.png" in html
+    assert "素材资料" in html
+    assert "data:image/svg+xml" in html
 
 
 def test_render_report_html_includes_declared_screen_size_when_present():
@@ -104,6 +106,26 @@ def test_render_report_html_handles_empty_results():
 
     assert "未发现明确问题" in html
     assert "本图没有可生成的标注截图" in html
+
+
+def test_pending_section_is_collapsed_by_default():
+    payload = _audit_payload()
+    payload["cannot_verify"] = [{"item": "图标素材", "reason": "缺少原始资源"}]
+
+    html = render_report_html(
+        task={"title": "审核", "summary": "完成"},
+        image_results=[
+            {
+                "filename": "image-001.png",
+                "audit": payload,
+                "artifacts": {},
+            }
+        ],
+    )
+
+    assert '<details class="pending-details">' in html
+    assert "<summary>待确认</summary>" in html
+    assert '<details class="pending-details" open>' not in html
 
 
 def test_core_conclusion_shows_compliance_status_before_summary_analysis():
@@ -240,23 +262,32 @@ def test_render_report_html_matches_skill_report_structure():
     assert "全图标注" in html
     assert "issue-color-01.png" in html
     assert "<figcaption>全图标注</figcaption><img" in html
-    assert "color-01：绿色按钮" in html
-    assert "tag-01：功能胶囊不符合 JM AI tag/button" in html
+    assert "编号 01｜修改建议：改为 #6B36FA" in html
+    assert "编号 02｜修改建议：改为 JM AI tag/button 样式" in html
     assert html.index("全图标注") < html.index("issue-color-01.png")
     assert "<th>优先级</th>" not in html
+    assert "<th>编号</th>" in html
+    assert "<th>规范要求</th>" not in html
+    assert "<th>素材资料</th>" in html
+    assert '<span class="issue-number">01</span>' in html
+    assert '<span class="issue-number">02</span>' in html
+    assert "data:image/svg+xml" in html
+    assert "material-preview" in html
     assert '<table class="issues-table">' in html
-    assert ".issues-table th:nth-child(1), .issues-table td:nth-child(1) { width: 9%; }" in html
-    assert ".issues-table th:nth-child(2), .issues-table td:nth-child(2) { width: 18%; }" in html
+    assert ".issues-table th:nth-child(1), .issues-table td:nth-child(1) { width: 7%; }" in html
+    assert ".issues-table th:nth-child(2), .issues-table td:nth-child(2) { width: 9%; }" in html
+    assert ".issues-table th:nth-child(6), .issues-table td:nth-child(6) { width: 18%; }" in html
     assert "置信度" not in html
     assert "待确认" in html
     assert "无法确认项" not in html
     checklist_html = html.split("审核综述", 1)[1].split("问题截图", 1)[0]
     assert "无法确认" not in checklist_html
     assert "字体族" not in checklist_html
+    assert "字号层级" not in html
+    assert "字体族" not in html
     assert '<table class="checklist-table">' in html
-    assert '<span class="status-pass">通过</span>' in html
     assert '<span class="status-fail">不通过</span>' in html
     assert ".checklist-table th:nth-child(2), .checklist-table td:nth-child(2) { width: 16%; }" in html
     assert ".screenshots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }" in html
     assert ".screenshot-card:not(.wide) { aspect-ratio: 1 / 1;" in html
-    assert html.index("字号层级") < html.index("AI 主色")
+    assert "AI 主色" in html

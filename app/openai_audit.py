@@ -108,6 +108,8 @@ def build_audit_prompt(
         "问题 bbox 使用 [x, y, w, h] 截图像素坐标；无法可靠定位时 bbox 为 null。"
         "不要编造测量数据；只有能从截图判断或后续工具可测量的内容才写入证据请求。"
         "regions 字段用于请求测量区域，distances 字段用于请求间距测量。"
+        "暂时不要审核字体相关问题，包括字体族、字号、字重、行高、typography、font；"
+        "不要在 issues、checklist、passes、cannot_verify、regions 中输出字体相关条目。"
         f"{size_context}"
         "\n\nJM AI SPEC:\n"
         f"{spec_text}"
