@@ -144,7 +144,7 @@ def test_run_measurements_creates_json_and_crops(tmp_path):
 def test_run_annotations_creates_annotated_image_and_crop(tmp_path):
     image = tmp_path / "input.png"
     original_color = (107, 54, 250)
-    Image.new("RGB", (80, 80), color=original_color).save(image)
+    Image.new("RGB", (120, 120), color=original_color).save(image)
     issues = tmp_path / "issues.json"
     output_dir = tmp_path / "annotations"
     write_json(
@@ -155,7 +155,7 @@ def test_run_annotations_creates_annotated_image_and_crop(tmp_path):
                 "title": "颜色错误",
                 "severity": "中",
                 "category": "色彩",
-                "bbox": [20, 20, 40, 30],
+                "bbox": [50, 50, 20, 20],
             }
         ],
     )
@@ -165,5 +165,8 @@ def test_run_annotations_creates_annotated_image_and_crop(tmp_path):
     assert (output_dir / "annotated.png").exists()
     assert (output_dir / "issue-color-01.png").exists()
     annotated = Image.open(output_dir / "annotated.png").convert("RGB")
-    assert annotated.getpixel((40, 35)) == original_color
+    crop = Image.open(output_dir / "issue-color-01.png")
+    assert crop.size == (68, 68)
+    assert annotated.getpixel((60, 60)) == original_color
+    assert annotated.getpixel((40, 40)) == original_color
     assert annotated.getpixel((0, 0)) != original_color

@@ -18,6 +18,7 @@ COLORS = {
 }
 MASK_COLOR = (15, 23, 42, 118)
 BORDER_WIDTH = 8
+ANNOTATION_PAD = 24
 
 
 def load_issues(path: Path) -> list[dict[str, Any]]:
@@ -37,13 +38,27 @@ def valid_bbox(value: Any) -> bool:
     )
 
 
-def clamp_bbox(bbox: list[float], width: int, height: int, pad: int = 24) -> tuple[int, int, int, int]:
+def clamp_bbox(
+    bbox: list[float],
+    width: int,
+    height: int,
+    pad: int = ANNOTATION_PAD,
+) -> tuple[int, int, int, int]:
     x, y, w, h = bbox
     left = max(0, int(round(x)) - pad)
     top = max(0, int(round(y)) - pad)
     right = min(width, int(round(x + w)) + pad)
     bottom = min(height, int(round(y + h)) + pad)
     return left, top, right, bottom
+
+
+def normalize_bbox(bbox: list[float], width: int, height: int) -> tuple[int, int, int, int]:
+    x, y, w, h = [int(round(v)) for v in bbox]
+    x = max(0, min(x, width - 1))
+    y = max(0, min(y, height - 1))
+    w = max(1, min(w, width - x))
+    h = max(1, min(h, height - y))
+    return x, y, w, h
 
 
 def draw_label(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, color: tuple[int, int, int]) -> None:
@@ -82,22 +97,19 @@ def main() -> int:
         issue_id = str(issue.get("id") or f"issue-{index}")
         severity = str(issue.get("severity") or "中")
         color = COLORS.get(severity, COLORS["中"])
-        x, y, w, h = [int(round(v)) for v in issue["bbox"]]
-        x = max(0, min(x, width - 1))
-        y = max(0, min(y, height - 1))
-        w = max(1, min(w, width - x))
-        h = max(1, min(h, height - y))
+        x, y, w, h = normalize_bbox(issue["bbox"], width, height)
+        left, top, right, bottom = clamp_bbox([x, y, w, h], width, height)
 
-        annotated_rgba.paste(image.crop((x, y, x + w, y + h)), (x, y))
+        annotated_rgba.paste(image.crop((left, top, right, bottom)), (left, top))
         draw = ImageDraw.Draw(annotated_rgba)
         for offset in range(BORDER_WIDTH):
             draw.rectangle(
-                (x - offset, y - offset, x + w + offset, y + h + offset),
+                (left - offset, top - offset, right + offset, bottom + offset),
                 outline=color + (255,),
             )
-        draw_label(draw, (x, max(0, y - 22)), f"{index}. {issue_id}", color)
+        draw_label(draw, (left, max(0, top - 22)), f"{index}. {issue_id}", color)
 
-        crop_box = clamp_bbox([x, y, w, h], width, height)
+        crop_box = (left, top, right, bottom)
         crop = image.crop(crop_box)
         crop.save(output_dir / f"issue-{issue_id}.png")
 

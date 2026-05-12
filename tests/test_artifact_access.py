@@ -88,3 +88,10 @@ def test_artifact_requires_task_permission(client, settings):
     allowed = client.get(f"/artifacts/{task.id}/image-001/tokens.json")
     assert allowed.status_code == 200
     assert allowed.json() == {"private": True}
+
+
+def test_spec_materials_are_served_as_static_assets(client):
+    response = client.get("/materials/crops/button-primary-filled.png")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"

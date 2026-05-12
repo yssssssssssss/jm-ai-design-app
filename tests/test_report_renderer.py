@@ -40,14 +40,16 @@ def test_render_report_html_escapes_user_text_and_includes_image_sections():
         ],
     )
 
-    assert "<script>" not in html
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "JM AI 设计规范审核报告" in html
     assert "image-001.png" in html
     assert "审核综述" in html
     assert "AI 主色" in html
     assert "artifacts/image-001/annotated.png" in html
     assert "素材资料" in html
-    assert "data:image/svg+xml" in html
+    assert "/materials/crops/" in html
+    assert 'data-material-viewer="true"' in html
 
 
 def test_render_report_html_includes_declared_screen_size_when_present():
@@ -82,6 +84,30 @@ def test_render_report_html_builds_protected_artifact_urls_when_task_id_is_known
 
     assert "/artifacts/42/artifacts/image-001/annotated.png" in html
     assert "/artifacts/42/artifacts/image-001/measurements.json" in html
+
+
+def test_render_report_html_adds_local_file_fallbacks_when_task_id_is_known():
+    html = render_report_html(
+        task={"title": "审核", "summary": "完成"},
+        image_results=[
+            {
+                "filename": "image-001.png",
+                "audit": _audit_payload(),
+                "artifacts": {
+                    "annotated": "uploads/42/artifacts/image-001/annotated.png",
+                    "issue_crops": ["uploads/42/artifacts/image-001/issue-color-01.png"],
+                },
+            }
+        ],
+        task_id=42,
+    )
+
+    assert 'src="/artifacts/42/artifacts/image-001/annotated.png"' in html
+    assert 'data-file-src="artifacts/image-001/annotated.png"' in html
+    assert 'data-file-src="artifacts/image-001/issue-color-01.png"' in html
+    assert 'src="/materials/crops/color-ai-palette.png"' in html
+    assert 'data-file-src="../../../assets/spec-materials/crops/color-ai-palette.png"' in html
+    assert 'onerror="this.onerror=null;this.src=this.dataset.fileSrc;"' in html
 
 
 def test_render_report_html_handles_empty_results():
@@ -126,6 +152,32 @@ def test_pending_section_is_collapsed_by_default():
     assert '<details class="pending-details">' in html
     assert "<summary>待确认</summary>" in html
     assert '<details class="pending-details" open>' not in html
+
+
+def test_material_preview_has_zoomable_modal_viewer():
+    html = render_report_html(
+        task={"title": "审核", "summary": "完成"},
+        image_results=[
+            {
+                "filename": "image-001.png",
+                "audit": _audit_payload(),
+                "artifacts": {},
+            }
+        ],
+    )
+
+    assert 'class="material-viewer"' in html
+    assert "data-material-viewer-modal hidden" in html
+    assert "material-viewer-stage" in html
+    assert "material-viewer-image" in html
+    assert "滚轮或双指触控板缩放" in html
+    assert "img.material-preview[data-material-viewer]" in html
+    assert 'stage.addEventListener("wheel"' in html
+    assert "{ passive: false }" in html
+    assert 'stage.addEventListener("pointerdown"' in html
+    assert 'stage.addEventListener("pointermove"' in html
+    assert "translate3d" in html
+    assert "scale" in html
 
 
 def test_core_conclusion_shows_compliance_status_before_summary_analysis():
@@ -271,8 +323,9 @@ def test_render_report_html_matches_skill_report_structure():
     assert "<th>素材资料</th>" in html
     assert '<span class="issue-number">01</span>' in html
     assert '<span class="issue-number">02</span>' in html
-    assert "data:image/svg+xml" in html
+    assert "/materials/crops/" in html
     assert "material-preview" in html
+    assert "material-viewer" in html
     assert '<table class="issues-table">' in html
     assert ".issues-table th:nth-child(1), .issues-table td:nth-child(1) { width: 7%; }" in html
     assert ".issues-table th:nth-child(2), .issues-table td:nth-child(2) { width: 9%; }" in html

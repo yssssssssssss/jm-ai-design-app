@@ -92,6 +92,18 @@ def test_upload_creates_task_and_lists_only_owner_tasks(client, tmp_path):
     assert "Alice audit" not in bob_tasks.text
 
 
+def test_upload_page_hides_declared_screen_size_inputs(client):
+    _register(client, "alice")
+    page = client.get("/")
+
+    assert page.status_code == 200
+    assert "稿件尺寸" not in page.text
+    assert 'name="screen_width_px"' not in page.text
+    assert 'name="screen_height_px"' not in page.text
+    assert "稿件宽度 px" not in page.text
+    assert "稿件高度 px" not in page.text
+
+
 def test_upload_persists_declared_screen_size(client, settings, tmp_path):
     _register(client, "alice")
     page = client.get("/")

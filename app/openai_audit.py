@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
+from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Protocol
 
 from PIL import Image
 
 
+AUDIT_IMAGE_MAX_SIDE = 1600
+DEGRADED_AUDIT_IMAGE_MAX_SIDE = 1200
+AUDIT_IMAGE_JPEG_QUALITY = 85
 REQUIRED_KEYS = {
     "screen_context",
     "overall_conclusion",
@@ -25,6 +31,13 @@ ARRAY_KEYS = REQUIRED_KEYS - {"screen_context", "overall_conclusion"}
 
 class AuditModelError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class AuditImageInput:
+    data_url: str
+    original_size: tuple[int, int]
+    audit_size: tuple[int, int]
 
 
 class _ResponsesClient(Protocol):
@@ -73,22 +86,54 @@ def _nullable_bbox() -> dict[str, Any]:
     }
 
 
-def _image_size(path: Path) -> tuple[int, int]:
-    with Image.open(path) as image:
-        return image.size
+def compact_audit_spec(spec_text: str) -> str:
+    """Remove sections that the runtime prompt explicitly excludes."""
+    compact_lines: list[str] = []
+    skipping_section = False
+
+    for line in spec_text.splitlines():
+        if line.startswith("## "):
+            heading = line[3:].strip().lower()
+            skipping_section = heading == "typography"
+            if skipping_section:
+                continue
+
+        if skipping_section:
+            continue
+
+        lowered = line.lower()
+        if lowered.strip() == "- typography":
+            continue
+        if "font family" in lowered or "font weight" in lowered:
+            continue
+
+        compact_lines.append(line)
+
+    compact_text = "\n".join(compact_lines).strip()
+    while "\n\n\n" in compact_text:
+        compact_text = compact_text.replace("\n\n\n", "\n\n")
+    return compact_text
 
 
 def build_audit_prompt(
     spec_text: str,
     declared_screen_size: tuple[int, int] | None = None,
     actual_image_size: tuple[int, int] | None = None,
+    audit_image_size: tuple[int, int] | None = None,
 ) -> str:
     size_context = ""
-    if actual_image_size or declared_screen_size:
+    if actual_image_size or audit_image_size or declared_screen_size:
         lines = ["\n\n尺寸上下文:"]
         if actual_image_size:
             lines.append(
                 f"- 上传图片实际像素尺寸：{actual_image_size[0]}px × {actual_image_size[1]}px。"
+            )
+        if audit_image_size and audit_image_size != actual_image_size:
+            lines.append(
+                f"- 模型当前看到的压缩审核图尺寸：{audit_image_size[0]}px × {audit_image_size[1]}px。"
+            )
+            lines.append(
+                "- 坐标输出要求：bbox、sample_points、regions 必须使用当前可见审核图坐标；系统会映射回原图。"
             )
         if declared_screen_size:
             lines.append(
@@ -253,6 +298,122 @@ def image_data_url(path: Path) -> str:
     return f"data:{media_type};base64,{encoded}"
 
 
+def _data_url_from_bytes(payload: bytes, media_type: str) -> str:
+    encoded = base64.b64encode(payload).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
+
+
+def _resized_dimensions(size: tuple[int, int], max_side: int) -> tuple[int, int]:
+    width, height = size
+    if max_side <= 0 or max(width, height) <= max_side:
+        return size
+
+    scale = max_side / max(width, height)
+    return (max(1, round(width * scale)), max(1, round(height * scale)))
+
+
+def _rgb_image(image: Image.Image) -> Image.Image:
+    if image.mode == "RGB":
+        return image
+    if image.mode in {"RGBA", "LA"}:
+        background = Image.new("RGB", image.size, "#FFFFFF")
+        background.paste(image, mask=image.getchannel("A"))
+        return background
+    return image.convert("RGB")
+
+
+def prepare_audit_image(
+    path: Path,
+    max_side: int = AUDIT_IMAGE_MAX_SIDE,
+    jpeg_quality: int = AUDIT_IMAGE_JPEG_QUALITY,
+) -> AuditImageInput:
+    with Image.open(path) as image:
+        original_size = image.size
+        audit_size = _resized_dimensions(original_size, max_side)
+
+        if audit_size == original_size:
+            return AuditImageInput(
+                data_url=image_data_url(path),
+                original_size=original_size,
+                audit_size=audit_size,
+            )
+
+        resized = _rgb_image(image).resize(audit_size, Image.Resampling.LANCZOS)
+        buffer = BytesIO()
+        resized.save(buffer, format="JPEG", quality=jpeg_quality, optimize=True)
+
+    return AuditImageInput(
+        data_url=_data_url_from_bytes(buffer.getvalue(), "image/jpeg"),
+        original_size=original_size,
+        audit_size=audit_size,
+    )
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _scale_pixel(value: int | float, factor: float) -> int:
+    return int(round(value * factor))
+
+
+def _scale_bbox(
+    bbox: Any,
+    scale_x: float,
+    scale_y: float,
+) -> Any:
+    if (
+        not isinstance(bbox, list)
+        or len(bbox) != 4
+        or not all(_is_number(value) for value in bbox)
+    ):
+        return bbox
+    x, y, width, height = bbox
+    return [
+        _scale_pixel(x, scale_x),
+        _scale_pixel(y, scale_y),
+        _scale_pixel(width, scale_x),
+        _scale_pixel(height, scale_y),
+    ]
+
+
+def remap_audit_coordinates(
+    audit: dict[str, Any],
+    source_size: tuple[int, int],
+    target_size: tuple[int, int],
+) -> dict[str, Any]:
+    if source_size == target_size:
+        return audit
+
+    source_width, source_height = source_size
+    target_width, target_height = target_size
+    if source_width <= 0 or source_height <= 0:
+        return audit
+
+    scale_x = target_width / source_width
+    scale_y = target_height / source_height
+    mapped = copy.deepcopy(audit)
+
+    for issue in mapped.get("issues", []):
+        if isinstance(issue, dict):
+            issue["bbox"] = _scale_bbox(issue.get("bbox"), scale_x, scale_y)
+
+    for point in mapped.get("sample_points", []):
+        if (
+            isinstance(point, dict)
+            and _is_number(point.get("x"))
+            and _is_number(point.get("y"))
+        ):
+            point["x"] = _scale_pixel(point["x"], scale_x)
+            point["y"] = _scale_pixel(point["y"], scale_y)
+
+    for region in mapped.get("regions", []):
+        if isinstance(region, dict):
+            region["bbox"] = _scale_bbox(region.get("bbox"), scale_x, scale_y)
+
+    return mapped
+
+
 def audit_image(
     client: _OpenAIClient,
     model: str,
@@ -260,8 +421,10 @@ def audit_image(
     spec_text: str,
     reasoning_effort: str | None = None,
     declared_screen_size: tuple[int, int] | None = None,
+    max_image_side: int = AUDIT_IMAGE_MAX_SIDE,
+    image_detail: str = "high",
 ) -> dict[str, Any]:
-    actual_image_size = _image_size(image_path)
+    audit_input = prepare_audit_image(image_path, max_side=max_image_side)
     request: dict[str, Any] = {
         "model": model,
         "input": [
@@ -273,13 +436,14 @@ def audit_image(
                         "text": build_audit_prompt(
                             spec_text,
                             declared_screen_size=declared_screen_size,
-                            actual_image_size=actual_image_size,
+                            actual_image_size=audit_input.original_size,
+                            audit_image_size=audit_input.audit_size,
                         ),
                     },
                     {
                         "type": "input_image",
-                        "image_url": image_data_url(image_path),
-                        "detail": "high",
+                        "image_url": audit_input.data_url,
+                        "detail": image_detail,
                     },
                 ],
             }
@@ -290,7 +454,12 @@ def audit_image(
         request["reasoning"] = {"effort": reasoning_effort}
 
     response = client.responses.create(**request)
-    return parse_audit_json(response.output_text)
+    audit = parse_audit_json(response.output_text)
+    return remap_audit_coordinates(
+        audit,
+        source_size=audit_input.audit_size,
+        target_size=audit_input.original_size,
+    )
 
 
 def audit_image_with_chat(
@@ -300,13 +469,17 @@ def audit_image_with_chat(
     spec_text: str,
     reasoning_effort: str | None = None,
     declared_screen_size: tuple[int, int] | None = None,
+    max_image_side: int = AUDIT_IMAGE_MAX_SIDE,
+    image_detail: str = "high",
 ) -> dict[str, Any]:
-    actual_image_size = _image_size(image_path)
+    _ = image_detail
+    audit_input = prepare_audit_image(image_path, max_side=max_image_side)
     prompt = (
         build_audit_prompt(
             spec_text,
             declared_screen_size=declared_screen_size,
-            actual_image_size=actual_image_size,
+            actual_image_size=audit_input.original_size,
+            audit_image_size=audit_input.audit_size,
         )
         + "\n\n必须只输出一个 JSON 对象，不要输出 Markdown，不要包裹代码块。"
     )
@@ -317,7 +490,7 @@ def audit_image_with_chat(
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_data_url(image_path)}},
+                    {"type": "image_url", "image_url": {"url": audit_input.data_url}},
                 ],
             }
         ],
@@ -327,4 +500,9 @@ def audit_image_with_chat(
         request["reasoning"] = {"effort": reasoning_effort}
 
     response = client.chat.completions.create(**request)
-    return parse_audit_json(response.choices[0].message.content)
+    audit = parse_audit_json(response.choices[0].message.content)
+    return remap_audit_coordinates(
+        audit,
+        source_size=audit_input.audit_size,
+        target_size=audit_input.original_size,
+    )

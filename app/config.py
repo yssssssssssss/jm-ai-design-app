@@ -18,7 +18,7 @@ REQUIRED_ENV = [
 TRUE_VALUES = {"true", "1", "yes", "on"}
 FALSE_VALUES = {"false", "0", "no", "off"}
 REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
-AUDIT_MODEL_PROVIDERS = {"openai", "jdcloud"}
+AUDIT_MODEL_PROVIDERS = {"openai", "jdcloud", "superapi"}
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -40,6 +40,11 @@ class Settings:
     jdcloud_openai_audit_model: str | None = None
     jdcloud_openai_reasoning_effort: str | None = None
     jdcloud_openai_timeout_seconds: int | None = None
+    superapi_openai_api_key: str | None = None
+    superapi_openai_base_url: str | None = None
+    superapi_openai_audit_model: str | None = None
+    superapi_openai_reasoning_effort: str | None = None
+    superapi_openai_timeout_seconds: int | None = None
     max_upload_files: int = 8
     max_upload_mb_per_file: int = 10
     secure_cookies: bool = False
@@ -57,30 +62,40 @@ class Settings:
     def audit_api_key(self) -> str:
         if self.audit_model_provider == "jdcloud":
             return self.jdcloud_openai_api_key or ""
+        if self.audit_model_provider == "superapi":
+            return self.superapi_openai_api_key or ""
         return self.openai_api_key
 
     @property
     def audit_base_url(self) -> str | None:
         if self.audit_model_provider == "jdcloud":
             return self.jdcloud_openai_base_url
+        if self.audit_model_provider == "superapi":
+            return self.superapi_openai_base_url
         return self.openai_base_url
 
     @property
     def audit_model(self) -> str:
         if self.audit_model_provider == "jdcloud":
             return self.jdcloud_openai_audit_model or ""
+        if self.audit_model_provider == "superapi":
+            return self.superapi_openai_audit_model or self.openai_audit_model
         return self.openai_audit_model
 
     @property
     def audit_reasoning_effort(self) -> str | None:
         if self.audit_model_provider == "jdcloud":
             return self.jdcloud_openai_reasoning_effort
+        if self.audit_model_provider == "superapi":
+            return self.superapi_openai_reasoning_effort or self.openai_reasoning_effort
         return self.openai_reasoning_effort
 
     @property
     def audit_timeout_seconds(self) -> int:
         if self.audit_model_provider == "jdcloud":
             return self.jdcloud_openai_timeout_seconds or self.openai_timeout_seconds
+        if self.audit_model_provider == "superapi":
+            return self.superapi_openai_timeout_seconds or self.openai_timeout_seconds
         return self.openai_timeout_seconds
 
 
@@ -135,7 +150,9 @@ def _load_positive_int(key: str, default: str) -> int:
 def _load_audit_model_provider() -> str:
     provider = (os.getenv("AUDIT_MODEL_PROVIDER") or "openai").strip().lower()
     if provider not in AUDIT_MODEL_PROVIDERS:
-        raise RuntimeError("Invalid AUDIT_MODEL_PROVIDER value. Expected openai or jdcloud")
+        raise RuntimeError(
+            "Invalid AUDIT_MODEL_PROVIDER value. Expected openai, jdcloud, or superapi"
+        )
     return provider
 
 
@@ -159,6 +176,21 @@ def _load_jdcloud_required_values(provider: str) -> dict[str, str | None]:
     return values
 
 
+def _load_superapi_required_values(provider: str) -> dict[str, str | None]:
+    keys = [
+        "SUPERAPI_OPENAI_API_KEY",
+        "SUPERAPI_OPENAI_BASE_URL",
+    ]
+    values = {key: _load_optional_env(key) for key in keys}
+    if provider == "superapi":
+        missing = [key for key, value in values.items() if not value]
+        if missing:
+            raise RuntimeError(
+                f"Missing required environment variables: {', '.join(missing)}"
+            )
+    return values
+
+
 def load_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env", override=False)
     env = {key: (os.getenv(key) or "").strip() for key in REQUIRED_ENV}
@@ -168,6 +200,7 @@ def load_settings() -> Settings:
 
     audit_model_provider = _load_audit_model_provider()
     jdcloud_values = _load_jdcloud_required_values(audit_model_provider)
+    superapi_values = _load_superapi_required_values(audit_model_provider)
 
     return Settings(
         openai_api_key=env["OPENAI_API_KEY"],
@@ -189,6 +222,15 @@ def load_settings() -> Settings:
         ),
         jdcloud_openai_timeout_seconds=_load_positive_int(
             "JDCLOUD_OPENAI_TIMEOUT_SECONDS", str(_load_openai_timeout_seconds())
+        ),
+        superapi_openai_api_key=superapi_values["SUPERAPI_OPENAI_API_KEY"],
+        superapi_openai_base_url=superapi_values["SUPERAPI_OPENAI_BASE_URL"],
+        superapi_openai_audit_model=_load_optional_env("SUPERAPI_OPENAI_AUDIT_MODEL"),
+        superapi_openai_reasoning_effort=_load_reasoning_effort_env(
+            "SUPERAPI_OPENAI_REASONING_EFFORT"
+        ),
+        superapi_openai_timeout_seconds=_load_positive_int(
+            "SUPERAPI_OPENAI_TIMEOUT_SECONDS", str(_load_openai_timeout_seconds())
         ),
         max_upload_files=int(os.getenv("MAX_UPLOAD_FILES", "8")),
         max_upload_mb_per_file=int(os.getenv("MAX_UPLOAD_MB_PER_FILE", "10")),

@@ -201,6 +201,8 @@ def test_default_auditor_uses_jdcloud_chat_when_configured(monkeypatch, tmp_path
         spec_text,
         reasoning_effort=None,
         declared_screen_size=None,
+        max_image_side=None,
+        image_detail=None,
     ):
         captured_audit.update(
             {
@@ -210,6 +212,8 @@ def test_default_auditor_uses_jdcloud_chat_when_configured(monkeypatch, tmp_path
                 "spec_text": spec_text,
                 "reasoning_effort": reasoning_effort,
                 "declared_screen_size": declared_screen_size,
+                "max_image_side": max_image_side,
+                "image_detail": image_detail,
             }
         )
         return {}
@@ -235,3 +239,144 @@ def test_default_auditor_uses_jdcloud_chat_when_configured(monkeypatch, tmp_path
     assert captured_audit["spec_text"] == "spec"
     assert captured_audit["reasoning_effort"] is None
     assert captured_audit["declared_screen_size"] == (1440, 900)
+    assert captured_audit["max_image_side"] == task_runner.AUDIT_IMAGE_MAX_SIDE
+    assert captured_audit["image_detail"] == "high"
+
+
+def test_default_auditor_uses_superapi_config(monkeypatch, tmp_path):
+    settings = Settings(
+        openai_api_key="key",
+        app_secret_key="secret",
+        register_invite_code="invite",
+        initial_admin_username="admin",
+        initial_admin_password="password123",
+        data_dir=tmp_path,
+        audit_model_provider="superapi",
+        openai_audit_model="gpt-5.5",
+        openai_reasoning_effort="medium",
+        superapi_openai_api_key="super-key",
+        superapi_openai_base_url="https://superapi.buzz/v1",
+        superapi_openai_timeout_seconds=90,
+    )
+    captured_client = {}
+    captured_audit = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured_client.update(kwargs)
+
+    def fake_audit(
+        client,
+        model,
+        image_path,
+        spec_text,
+        reasoning_effort=None,
+        declared_screen_size=None,
+        max_image_side=None,
+        image_detail=None,
+    ):
+        captured_audit.update(
+            {
+                "client": client,
+                "model": model,
+                "image_path": image_path,
+                "spec_text": spec_text,
+                "reasoning_effort": reasoning_effort,
+                "declared_screen_size": declared_screen_size,
+                "max_image_side": max_image_side,
+                "image_detail": image_detail,
+            }
+        )
+        return {}
+
+    monkeypatch.setattr(task_runner, "OpenAI", FakeClient)
+    monkeypatch.setattr(task_runner, "audit_image", fake_audit)
+    spec_path = tmp_path / "spec.md"
+    spec_path.write_text("spec", encoding="utf-8")
+    monkeypatch.setattr(task_runner, "SPEC_PATH", spec_path)
+
+    auditor = task_runner._default_auditor(settings, declared_screen_size=(1440, 900))
+    image_path = tmp_path / "screen.png"
+    auditor(image_path)
+
+    assert captured_client == {
+        "api_key": "super-key",
+        "base_url": "https://superapi.buzz/v1",
+        "timeout": 90,
+        "max_retries": 0,
+    }
+    assert captured_audit["model"] == "gpt-5.5"
+    assert captured_audit["image_path"] == image_path
+    assert captured_audit["spec_text"] == "spec"
+    assert captured_audit["reasoning_effort"] == "medium"
+    assert captured_audit["declared_screen_size"] == (1440, 900)
+    assert captured_audit["max_image_side"] == task_runner.AUDIT_IMAGE_MAX_SIDE
+    assert captured_audit["image_detail"] == "high"
+
+
+def test_default_auditor_retries_timeout_with_degraded_input(monkeypatch, tmp_path):
+    settings = Settings(
+        openai_api_key="key",
+        app_secret_key="secret",
+        register_invite_code="invite",
+        initial_admin_username="admin",
+        initial_admin_password="password123",
+        data_dir=tmp_path,
+        openai_audit_model="gpt-5.5",
+        openai_reasoning_effort="high",
+        openai_timeout_seconds=250,
+    )
+    created_clients = []
+    calls = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            created_clients.append(self)
+
+    def fake_audit(
+        client,
+        model,
+        image_path,
+        spec_text,
+        reasoning_effort=None,
+        declared_screen_size=None,
+        max_image_side=None,
+        image_detail=None,
+    ):
+        calls.append(
+            {
+                "client": client,
+                "model": model,
+                "image_path": image_path,
+                "spec_text": spec_text,
+                "reasoning_effort": reasoning_effort,
+                "declared_screen_size": declared_screen_size,
+                "max_image_side": max_image_side,
+                "image_detail": image_detail,
+            }
+        )
+        if len(calls) == 1:
+            raise TimeoutError("Request timed out.")
+        return {"ok": True}
+
+    monkeypatch.setattr(task_runner, "OpenAI", FakeClient)
+    monkeypatch.setattr(task_runner, "audit_image", fake_audit)
+    spec_path = tmp_path / "spec.md"
+    spec_path.write_text("spec", encoding="utf-8")
+    monkeypatch.setattr(task_runner, "SPEC_PATH", spec_path)
+
+    auditor = task_runner._default_auditor(settings, declared_screen_size=(1440, 900))
+    image_path = tmp_path / "screen.png"
+    result = auditor(image_path)
+
+    assert result == {"ok": True}
+    assert len(created_clients) == 2
+    assert created_clients[0].kwargs["timeout"] == task_runner.PRIMARY_AUDIT_TIMEOUT_SECONDS
+    assert created_clients[1].kwargs["timeout"] == 130
+    assert calls[0]["reasoning_effort"] == "high"
+    assert calls[0]["max_image_side"] == task_runner.AUDIT_IMAGE_MAX_SIDE
+    assert calls[0]["image_detail"] == "high"
+    assert calls[1]["reasoning_effort"] == "low"
+    assert calls[1]["max_image_side"] == task_runner.DEGRADED_AUDIT_IMAGE_MAX_SIDE
+    assert calls[1]["image_detail"] == "low"

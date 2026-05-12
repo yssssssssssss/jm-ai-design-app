@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import re
 from html import escape
 from typing import Any
-from urllib.parse import quote
 
 from app.evidence_tools import filter_font_related_audit
+from app.materials import match_material, material_url
 
 
 def _text(value: Any) -> str:
@@ -77,91 +76,41 @@ def _crop_issue_id(path: str) -> str | None:
     return filename[len("issue-") :].rsplit(".", 1)[0] or None
 
 
-def _svg_data_uri(svg: str) -> str:
-    return "data:image/svg+xml;charset=utf-8," + quote(svg)
+def _image_attrs(web_url: str, alt: str, file_url: str | None = None) -> str:
+    attrs = f'src="{_text(web_url)}" alt="{_text(alt)}"'
+    if file_url and file_url != web_url:
+        attrs += (
+            f' data-file-src="{_text(file_url)}"'
+            ' onerror="this.onerror=null;this.src=this.dataset.fileSrc;"'
+        )
+    return attrs
 
 
-def _issue_text(issue: dict[str, Any]) -> str:
-    return " ".join(
-        str(issue.get(key) or "")
-        for key in [
-            "category",
-            "location",
-            "current_observation",
-            "spec_expectation",
-            "recommendation",
-        ]
-    ).lower()
+def _material_file_url(material: dict[str, Any], task_id: int | None) -> str | None:
+    if task_id is None:
+        return None
+    crop_path = str(material.get("crop_path") or "").strip()
+    if not crop_path or crop_path.startswith("/") or ".." in crop_path.split("/"):
+        return None
+    return f"../../../assets/spec-materials/{crop_path}"
 
 
-def _hex_color_from_issue(issue: dict[str, Any]) -> str:
-    text = _issue_text(issue)
-    match = re.search(r"#[0-9a-fA-F]{6}\b", text)
-    return match.group(0).upper() if match else "#6B36FA"
-
-
-def _material_svg(issue: dict[str, Any]) -> tuple[str, str]:
-    text = _issue_text(issue)
-    color = _hex_color_from_issue(issue)
-    if any(token in text for token in ["按钮", "button"]):
-        title = "AI 按钮样式"
-        body = f"""
-        <svg xmlns="http://www.w3.org/2000/svg" width="220" height="96" viewBox="0 0 220 96">
-          <rect width="220" height="96" rx="10" fill="#F8F7FF"/>
-          <rect x="34" y="31" width="152" height="34" rx="8" fill="{color}"/>
-          <text x="110" y="53" fill="#FFFFFF" font-size="14" font-family="Arial, sans-serif" text-anchor="middle" font-weight="700">AI 按钮</text>
-          <text x="110" y="84" fill="#6B36FA" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">{color}</text>
-        </svg>
-        """
-    elif any(token in text for token in ["标签", "胶囊", "tag", "pill"]):
-        title = "AI 标签样式"
-        body = f"""
-        <svg xmlns="http://www.w3.org/2000/svg" width="220" height="96" viewBox="0 0 220 96">
-          <rect width="220" height="96" rx="10" fill="#F8F7FF"/>
-          <rect x="50" y="31" width="120" height="32" rx="16" fill="#F3F0FF" stroke="{color}" stroke-width="1.5"/>
-          <circle cx="70" cy="47" r="5" fill="{color}"/>
-          <text x="116" y="52" fill="{color}" font-size="13" font-family="Arial, sans-serif" text-anchor="middle" font-weight="700">AI 标签</text>
-          <text x="110" y="84" fill="#6B36FA" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">{color}</text>
-        </svg>
-        """
-    elif any(token in text for token in ["间距", "留白", "spacing", "padding", "gap"]):
-        title = "间距规范示意"
-        body = """
-        <svg xmlns="http://www.w3.org/2000/svg" width="220" height="96" viewBox="0 0 220 96">
-          <rect width="220" height="96" rx="10" fill="#F8F7FF"/>
-          <rect x="34" y="25" width="44" height="40" rx="8" fill="#EDEEFF" stroke="#6B36FA"/>
-          <rect x="142" y="25" width="44" height="40" rx="8" fill="#EDEEFF" stroke="#6B36FA"/>
-          <line x1="84" y1="45" x2="136" y2="45" stroke="#6B36FA" stroke-width="2"/>
-          <path d="M84 40v10M136 40v10" stroke="#6B36FA" stroke-width="2"/>
-          <text x="110" y="38" fill="#6B36FA" font-size="12" font-family="Arial, sans-serif" text-anchor="middle" font-weight="700">8 / 12 / 16 / 24 px</text>
-          <text x="110" y="84" fill="#6B7280" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">间距按 4px 栅格对齐</text>
-        </svg>
-        """
-    else:
-        title = "JM AI 色彩素材"
-        body = f"""
-        <svg xmlns="http://www.w3.org/2000/svg" width="220" height="96" viewBox="0 0 220 96">
-          <rect width="220" height="96" rx="10" fill="#F8F7FF"/>
-          <rect x="24" y="24" width="48" height="48" rx="8" fill="{color}"/>
-          <rect x="86" y="24" width="48" height="48" rx="8" fill="#8F55FD"/>
-          <rect x="148" y="24" width="48" height="48" rx="8" fill="#F3F0FF" stroke="#EBE5FA"/>
-          <text x="48" y="84" fill="#374151" font-size="10" font-family="Arial, sans-serif" text-anchor="middle">{color}</text>
-          <text x="110" y="84" fill="#374151" font-size="10" font-family="Arial, sans-serif" text-anchor="middle">#8F55FD</text>
-          <text x="172" y="84" fill="#374151" font-size="10" font-family="Arial, sans-serif" text-anchor="middle">#F3F0FF</text>
-        </svg>
-        """
-    return title, " ".join(body.split())
-
-
-def _material_image(issue: dict[str, Any]) -> str:
-    title, svg = _material_svg(issue)
+def _material_image(issue: dict[str, Any], task_id: int | None) -> str:
+    material = match_material(issue)
+    if not material:
+        return '<span class="material-empty">暂无匹配规范素材</span>'
+    url = material_url(material)
+    if not url:
+        return '<span class="material-empty">暂无匹配规范素材</span>'
+    title = material.get("title") or "规范素材"
+    attrs = _image_attrs(url, str(title), _material_file_url(material, task_id))
     return (
-        f'<img class="material-preview" src="{_text(_svg_data_uri(svg))}" '
-        f'alt="{_text(title)}">'
+        f'<img class="material-preview" {attrs} data-material-viewer="true" '
+        'role="button" tabindex="0" aria-label="放大查看参考素材">'
     )
 
 
-def _issues_table(issues: list[dict[str, Any]]) -> str:
+def _issues_table(issues: list[dict[str, Any]], task_id: int | None) -> str:
     if not issues:
         return '<p class="meta">未发现明确问题。</p>'
     rows = []
@@ -173,7 +122,7 @@ def _issues_table(issues: list[dict[str, Any]]) -> str:
             f"<td>{_text(issue.get('location'))}</td>"
             f"<td>{_text(issue.get('current_observation'))}</td>"
             f"<td>{_text(issue.get('recommendation'))}</td>"
-            f"<td>{_material_image(issue)}</td>"
+            f"<td>{_material_image(issue, task_id)}</td>"
             "</tr>"
         )
     return (
@@ -250,6 +199,22 @@ def _artifact_url(path: str | None, task_id: int | None) -> str | None:
     return f"/artifacts/{task_id}/{normalized}"
 
 
+def _artifact_file_url(path: str | None, task_id: int | None) -> str | None:
+    if not path or task_id is None:
+        return None
+    prefix = f"uploads/{task_id}/"
+    if path.startswith(prefix):
+        return path[len(prefix) :]
+
+    web_prefix = f"/artifacts/{task_id}/"
+    if path.startswith(web_prefix):
+        return path[len(web_prefix) :]
+
+    if path.startswith("/"):
+        return None
+    return path
+
+
 def _artifact_link(label: str, path: str | None, task_id: int | None) -> str:
     url = _artifact_url(path, task_id)
     if not url:
@@ -282,10 +247,11 @@ def _screenshots(
     figures: list[str] = []
     annotated = _artifact_url(artifacts.get("annotated"), task_id)
     if annotated:
+        annotated_file = _artifact_file_url(artifacts.get("annotated"), task_id)
         figures.append(
             '<figure class="screenshot-card wide">'
             "<figcaption>全图标注</figcaption>"
-            f'<img src="{_text(annotated)}" alt="全图标注">'
+            f'<img {_image_attrs(annotated, "全图标注", annotated_file)}>'
             "</figure>"
         )
 
@@ -295,6 +261,7 @@ def _screenshots(
         url = _artifact_url(crop, task_id)
         if not url:
             continue
+        file_url = _artifact_file_url(str(crop), task_id)
         issue_id = _crop_issue_id(str(crop))
         issue = indexed_issues.get(issue_id, (index, {}))[1]
         issue_index = indexed_issues.get(issue_id, (index, {}))[0]
@@ -311,7 +278,7 @@ def _screenshots(
         figures.append(
             '<figure class="screenshot-card">'
             f"<figcaption>{_text(caption)}</figcaption>"
-            f'<img src="{_text(url)}" alt="{_text(caption)}">'
+            f'<img {_image_attrs(url, caption, file_url)}>'
             "</figure>"
         )
 
@@ -348,7 +315,7 @@ def _image_section(index: int, result: dict[str, Any], task_id: int | None) -> s
       <div class="screenshots">{_screenshots(artifacts, audit.get("issues", []), task_id)}</div>
 
       <h3>详细问题清单</h3>
-      {_issues_table(audit.get("issues", []))}
+      {_issues_table(audit.get("issues", []), task_id)}
 
       <h3>符合规范的点</h3>
       {_list(audit.get("passes", []))}
@@ -373,6 +340,145 @@ def _declared_screen_size(task: dict[str, Any]) -> str:
     if not width or not height:
         return ""
     return f'<p>稿件基准尺寸：{_text(width)} × {_text(height)} px</p>'
+
+
+def _material_viewer() -> str:
+    return """
+    <div class="material-viewer" data-material-viewer-modal hidden aria-hidden="true">
+      <button class="material-viewer-close" type="button" aria-label="关闭参考素材预览">关闭</button>
+      <div class="material-viewer-stage" data-material-viewer-stage>
+        <img class="material-viewer-image" alt="参考素材预览" draggable="false">
+      </div>
+      <p class="material-viewer-hint">滚轮或双指触控板缩放，拖动查看不同位置，Esc 关闭</p>
+    </div>
+    """
+
+
+def _material_viewer_script() -> str:
+    return """
+  <script>
+    (() => {
+      const viewer = document.querySelector("[data-material-viewer-modal]");
+      if (!viewer) return;
+
+      const stage = viewer.querySelector("[data-material-viewer-stage]");
+      const image = viewer.querySelector(".material-viewer-image");
+      const closeButton = viewer.querySelector(".material-viewer-close");
+      let scale = 1;
+      let translateX = 0;
+      let translateY = 0;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let startTranslateX = 0;
+      let startTranslateY = 0;
+      let activePointerId = null;
+      let previousBodyOverflow = "";
+
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+      const render = () => {
+        image.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+      };
+
+      const resetView = () => {
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        render();
+      };
+
+      const openViewer = (trigger) => {
+        image.src = trigger.currentSrc || trigger.src;
+        image.alt = trigger.alt || "参考素材预览";
+        resetView();
+        previousBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        viewer.hidden = false;
+        viewer.setAttribute("aria-hidden", "false");
+        closeButton.focus({ preventScroll: true });
+      };
+
+      const closeViewer = () => {
+        if (viewer.hidden) return;
+        viewer.hidden = true;
+        viewer.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = previousBodyOverflow;
+        activePointerId = null;
+        stage.classList.remove("is-dragging");
+        image.removeAttribute("src");
+      };
+
+      document.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) return;
+        const trigger = event.target.closest("img.material-preview[data-material-viewer]");
+        if (!trigger) return;
+        event.preventDefault();
+        openViewer(trigger);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (!(event.target instanceof Element)) return;
+        const trigger = event.target.closest("img.material-preview[data-material-viewer]");
+        if (trigger && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          openViewer(trigger);
+          return;
+        }
+        if (event.key === "Escape") {
+          closeViewer();
+        }
+      });
+
+      closeButton.addEventListener("click", closeViewer);
+
+      stage.addEventListener("wheel", (event) => {
+        if (viewer.hidden) return;
+        event.preventDefault();
+        const nextScale = clamp(scale * Math.exp(-event.deltaY * 0.001), 0.5, 8);
+        if (nextScale === scale) return;
+
+        const rect = stage.getBoundingClientRect();
+        const focusX = event.clientX - rect.left - rect.width / 2 - translateX;
+        const focusY = event.clientY - rect.top - rect.height / 2 - translateY;
+        const ratio = nextScale / scale;
+        translateX -= focusX * (ratio - 1);
+        translateY -= focusY * (ratio - 1);
+        scale = nextScale;
+        render();
+      }, { passive: false });
+
+      stage.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        activePointerId = event.pointerId;
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
+        startTranslateX = translateX;
+        startTranslateY = translateY;
+        stage.classList.add("is-dragging");
+        stage.setPointerCapture(event.pointerId);
+      });
+
+      stage.addEventListener("pointermove", (event) => {
+        if (event.pointerId !== activePointerId) return;
+        translateX = startTranslateX + event.clientX - dragStartX;
+        translateY = startTranslateY + event.clientY - dragStartY;
+        render();
+      });
+
+      const stopDragging = (event) => {
+        if (event.pointerId !== activePointerId) return;
+        activePointerId = null;
+        stage.classList.remove("is-dragging");
+        if (stage.hasPointerCapture(event.pointerId)) {
+          stage.releasePointerCapture(event.pointerId);
+        }
+      };
+
+      stage.addEventListener("pointerup", stopDragging);
+      stage.addEventListener("pointercancel", stopDragging);
+    })();
+  </script>
+    """
 
 
 def render_report_html(
@@ -434,7 +540,17 @@ def render_report_html(
     .issues-table th:nth-child(5), .issues-table td:nth-child(5) {{ width: 27%; }}
     .issues-table th:nth-child(6), .issues-table td:nth-child(6) {{ width: 18%; }}
     .issue-number {{ display: inline-flex; align-items: center; justify-content: center; min-width: 30px; min-height: 24px; border-radius: 6px; background: var(--ai-soft); color: var(--ai); font-weight: 700; }}
-    .material-preview {{ display: block; width: 100%; max-width: 220px; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }}
+    .material-preview {{ display: block; width: 100%; max-width: 220px; max-height: 140px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: zoom-in; }}
+    .material-preview:focus {{ outline: 2px solid var(--ai); outline-offset: 2px; }}
+    .material-empty {{ display: inline-flex; align-items: center; min-height: 32px; color: var(--muted); font-size: 12px; }}
+    .material-viewer[hidden] {{ display: none; }}
+    .material-viewer {{ position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; overflow: hidden; }}
+    .material-viewer-stage {{ position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; cursor: grab; touch-action: none; }}
+    .material-viewer-stage.is-dragging {{ cursor: grabbing; }}
+    .material-viewer-image {{ display: block; max-width: 92vw; max-height: 84vh; object-fit: contain; background: transparent; user-select: none; pointer-events: none; transform-origin: center center; will-change: transform; }}
+    .material-viewer-close {{ position: fixed; top: 20px; right: 24px; z-index: 1; min-height: 36px; padding: 0 14px; border: 1px solid rgba(255, 255, 255, 0.42); border-radius: 6px; color: #fff; background: rgba(15, 23, 42, 0.54); font-weight: 700; cursor: pointer; }}
+    .material-viewer-close:focus {{ outline: 2px solid #fff; outline-offset: 2px; }}
+    .material-viewer-hint {{ position: fixed; left: 50%; bottom: 22px; z-index: 1; transform: translateX(-50%); margin: 0; padding: 6px 10px; border-radius: 6px; color: #fff; background: rgba(15, 23, 42, 0.54); font-size: 12px; }}
     .pending-details {{ margin-top: 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }}
     .pending-details summary {{ cursor: pointer; padding: 10px 12px; color: var(--text); font-weight: 600; }}
     .pending-details table, .pending-details .meta {{ margin: 0; border-left: 0; border-right: 0; border-bottom: 0; }}
@@ -458,6 +574,8 @@ def render_report_html(
       .report-header {{ display: block; }}
       .back-link {{ margin-top: 10px; }}
       .screenshots {{ grid-template-columns: 1fr; }}
+      .material-viewer-close {{ top: 12px; right: 12px; }}
+      .material-viewer-hint {{ width: calc(100vw - 24px); text-align: center; }}
       th, td {{ padding: 8px; }}
     }}
   </style>
@@ -475,5 +593,7 @@ def render_report_html(
     </section>
     {sections}
   </main>
+  {_material_viewer()}
+  {_material_viewer_script()}
 </body>
 </html>"""

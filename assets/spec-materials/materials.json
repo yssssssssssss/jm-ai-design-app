@@ -1,0 +1,141 @@
+[
+  {
+    "id": "color.ai.palette",
+    "title": "JM AI 色彩 Token",
+    "component": "color",
+    "source_image": "assets/spec-images/color.png",
+    "bbox": [88, 588, 2088, 1320],
+    "crop_path": "crops/color-ai-palette.png",
+    "keywords": ["颜色", "色彩", "color", "token", "色值", "主色", "品牌色", "状态色", "选中态", "active", "selected", "accent"],
+    "tokens": ["#6B36FA", "#8F55FD", "#3544EB", "#052474", "#000A1C", "#FFFFFF", "ai/ai-normal"],
+    "rule_ids": ["COLOR_TOKEN"]
+  },
+  {
+    "id": "color.ai.gradient",
+    "title": "JM AI 渐变规范",
+    "component": "color",
+    "source_image": "assets/spec-images/color.png",
+    "bbox": [84, 1340, 2076, 2416],
+    "crop_path": "crops/color-ai-gradient.png",
+    "keywords": ["渐变", "gradient", "比例", "角度", "蓝色占比", "purple", "blue"],
+    "tokens": ["Gradient/ai/ai-normal", "Gradient/ai/ai-light-normal", "#6B36FA", "#8F55FD", "#3544EB"],
+    "rule_ids": ["GRADIENT_RULE"]
+  },
+  {
+    "id": "color.ai.main.gradient",
+    "title": "AI 主渐变色 Token",
+    "component": "color",
+    "crop_path": "crops/color-ai-main-gradient.png",
+    "source_ref": "JM AI Color Spec / 2.1 主渐变色",
+    "keywords": ["主渐变色", "主渐变", "渐变", "gradient", "主色渐变", "normal", "hover", "click", "disable", "border", "background"],
+    "tokens": ["Gradient/ai/ai-normal", "Gradient/ai/ai-hover", "Gradient/ai/ai-click", "Gradient/ai/ai-disable", "Gradient/ai/ai-border", "Gradient/ai/ai-background"],
+    "rule_ids": ["GRADIENT_MAIN_TOKEN"]
+  },
+  {
+    "id": "color.ai.light.gradient",
+    "title": "AI Light 渐变色 Token",
+    "component": "color",
+    "crop_path": "crops/color-ai-light-gradient.png",
+    "source_ref": "JM AI Color Spec / 2.2 light 渐变色",
+    "keywords": ["light渐变色", "light 渐变色", "light渐变", "light gradient", "浅渐变", "浅色渐变", "ai-light", "light-normal", "light-hover", "light-click", "light-disable", "light-border", "light-background"],
+    "tokens": ["Gradient/ai/ai-light-normal", "Gradient/ai/ai-light-hover", "Gradient/ai/ai-light-click", "Gradient/ai/ai-light-disable", "Gradient/ai/ai-light-border", "Gradient/ai/ai-light-background"],
+    "rule_ids": ["GRADIENT_LIGHT_TOKEN"]
+  },
+  {
+    "id": "color.ai.main.solid",
+    "title": "AI 主纯色 Token",
+    "component": "color",
+    "crop_path": "crops/color-ai-main-color.png",
+    "source_ref": "JM AI Color Spec / 2.3 主纯色",
+    "keywords": ["主纯色", "纯色", "主色", "solid", "ai-normal", "ai-hover", "ai-click", "ai-disable", "ai-border", "ai-background", "禁用", "disabled", "边框", "背景"],
+    "tokens": ["#6B36FA", "#9975FC", "#4B26AF", "#BEAAF3", "#EBE5FA", "#EDEEFF", "ai/ai-normal", "ai/ai-hover", "ai/ai-click", "ai/ai-disable", "ai/ai-border", "ai/ai-background"],
+    "rule_ids": ["COLOR_MAIN_SOLID_TOKEN"]
+  },
+  {
+    "id": "color.ai.light.solid",
+    "title": "AI Light 纯色 Token",
+    "component": "color",
+    "crop_path": "crops/color-ai-light-color.png",
+    "source_ref": "JM AI Color Spec / 2.4 light 纯色",
+    "keywords": ["light纯色", "light 纯色", "浅色", "浅紫", "light solid", "ai-light-normal", "ai-light-hover", "ai-light-click", "ai-light-disable", "ai-light-border", "ai-light-background"],
+    "tokens": ["#F3F0FF", "#F7F5FF", "#EFEBFE", "#F4F2FA", "#F0EBFC", "#F4F5FF", "ai/ai-light-normal", "ai/ai-light-hover", "ai/ai-light-click", "ai/ai-light-disable", "ai/ai-light-border", "ai/ai-light-background"],
+    "rule_ids": ["COLOR_LIGHT_SOLID_TOKEN"]
+  },
+  {
+    "id": "button.primary.filled",
+    "title": "AI 主要按钮填充",
+    "component": "button",
+    "source_image": "assets/spec-images/buttons.png",
+    "bbox": [112, 730, 964, 1188],
+    "crop_path": "crops/button-primary-filled.png",
+    "keywords": ["按钮", "button", "主操作", "primary", "filled", "填充", "实心", "操作入口", "提交", "查询", "邀请", "续费"],
+    "tokens": ["#6B36FA", "#8F55FD", "#4B26AF", "#BEAAF3", "ai/ai-normal", "ai/ai-disable"],
+    "rule_ids": ["AI_BUTTON_COLOR", "AI_BUTTON_PRIMARY"]
+  },
+  {
+    "id": "button.secondary.filled",
+    "title": "AI 次要按钮填充",
+    "component": "button",
+    "source_image": "assets/spec-images/buttons.png",
+    "bbox": [1010, 730, 1880, 1188],
+    "crop_path": "crops/button-secondary-filled.png",
+    "keywords": ["按钮", "button", "次要", "secondary", "filled", "填充", "浅紫", "light", "配置", "筛选"],
+    "tokens": ["#F3F0FF", "#F7F5FF", "#EFEBFE", "#F4F2FA", "ai/ai-light-normal", "ai/ai-light-disable"],
+    "rule_ids": ["AI_BUTTON_COLOR", "AI_BUTTON_SECONDARY"]
+  },
+  {
+    "id": "button.outline",
+    "title": "AI 线性 / 虚线按钮",
+    "component": "button",
+    "source_image": "assets/spec-images/buttons.png",
+    "bbox": [1960, 730, 3710, 1188],
+    "crop_path": "crops/button-outline-dashed.png",
+    "keywords": ["按钮", "button", "outline", "线性", "边框", "虚线", "ghost", "dashed", "次级操作"],
+    "tokens": ["#6B36FA", "#8F55FD", "#4B26AF", "#BEAAF3", "ai/ai-border"],
+    "rule_ids": ["AI_BUTTON_OUTLINE", "AI_BUTTON_DASHED"]
+  },
+  {
+    "id": "tag.families",
+    "title": "AI 标签样式",
+    "component": "tag",
+    "source_image": "assets/spec-images/tags.png",
+    "bbox": [132, 620, 1160, 980],
+    "crop_path": "crops/tag-families.png",
+    "keywords": ["标签", "tag", "胶囊", "pill", "角标", "badge", "默认", "边线", "实色"],
+    "tokens": ["#6B36FA", "#F3F0FF", "#EBE5FA", "ai/ai-normal", "ai/ai-light-normal"],
+    "rule_ids": ["AI_TAG_STYLE", "AI_TAG_COLOR"]
+  },
+  {
+    "id": "spacing.scale",
+    "title": "间距尺度表",
+    "component": "spacing",
+    "source_image": "assets/spec-images/space.png",
+    "bbox": [190, 380, 1188, 742],
+    "crop_path": "crops/spacing-scale.png",
+    "keywords": ["间距", "spacing", "留白", "padding", "gap", "距离", "栅格", "4px", "尺度"],
+    "tokens": ["0", "2", "4", "8", "12", "16", "20", "24", "32", "40", "48", "56"],
+    "rule_ids": ["SPACING_SCALE"]
+  },
+  {
+    "id": "spacing.vertical.examples",
+    "title": "纵向间距使用建议",
+    "component": "spacing",
+    "source_image": "assets/spec-images/space.png",
+    "bbox": [190, 800, 1190, 1760],
+    "crop_path": "crops/spacing-vertical-examples.png",
+    "keywords": ["纵向", "垂直", "vertical", "面板外间距", "容器内间距", "条目", "小分割", "Bot", "用户"],
+    "tokens": ["@vertical-xxl", "@vertical-l", "@vertical-s", "@vertical-xs", "32px", "20px", "12px", "8px"],
+    "rule_ids": ["SPACING_VERTICAL"]
+  },
+  {
+    "id": "header.hierarchy",
+    "title": "Header 组件层级",
+    "component": "header",
+    "source_image": "assets/spec-images/header.png",
+    "bbox": [110, 520, 1820, 1260],
+    "crop_path": "crops/header-hierarchy.png",
+    "keywords": ["header", "标题", "页头", "导航", "层级", "品牌", "version", "右侧操作", "安全间距"],
+    "tokens": [],
+    "rule_ids": ["HEADER_HIERARCHY"]
+  }
+]

@@ -18,7 +18,13 @@ from app.evidence_tools import (
     write_regions_json,
 )
 from app.models import TASK_FAILED, TASK_RUNNING, TASK_SUCCEEDED
-from app.openai_audit import audit_image, audit_image_with_chat
+from app.openai_audit import (
+    AUDIT_IMAGE_MAX_SIDE,
+    DEGRADED_AUDIT_IMAGE_MAX_SIDE,
+    audit_image,
+    audit_image_with_chat,
+    compact_audit_spec,
+)
 from app.report_renderer import render_report_html
 from app.repositories import (
     get_task_by_id,
@@ -31,32 +37,86 @@ from app.storage import ensure_task_dirs, relative_to_data, resolve_data_path
 
 Auditor = Callable[[Path], dict[str, Any]]
 SPEC_PATH = Path(__file__).resolve().parent.parent / "references" / "jm-ai-design-spec.md"
+PRIMARY_AUDIT_TIMEOUT_SECONDS = 120
+MIN_FALLBACK_AUDIT_TIMEOUT_SECONDS = 30
+
+
+def _openai_client(settings: Settings, timeout: int) -> OpenAI:
+    return OpenAI(
+        api_key=settings.audit_api_key,
+        base_url=settings.audit_base_url,
+        timeout=timeout,
+        max_retries=0,
+    )
+
+
+def _fallback_timeout(settings: Settings, primary_timeout: int) -> int:
+    if settings.audit_timeout_seconds <= primary_timeout:
+        return settings.audit_timeout_seconds
+    return max(
+        MIN_FALLBACK_AUDIT_TIMEOUT_SECONDS,
+        settings.audit_timeout_seconds - primary_timeout,
+    )
+
+
+def _is_timeout_error(exc: Exception) -> bool:
+    text = f"{exc.__class__.__name__}: {exc}".lower()
+    return "timeout" in text or "timed out" in text
+
+
+def _degraded_reasoning_effort(reasoning_effort: str | None) -> str | None:
+    if reasoning_effort in {"medium", "high", "xhigh"}:
+        return "low"
+    return reasoning_effort
 
 
 def _default_auditor(
     settings: Settings,
     declared_screen_size: tuple[int, int] | None = None,
 ) -> Auditor:
-    spec_text = SPEC_PATH.read_text(encoding="utf-8")
-    client = OpenAI(
-        api_key=settings.audit_api_key,
-        base_url=settings.audit_base_url,
-        timeout=settings.audit_timeout_seconds,
-        max_retries=0,
-    )
+    spec_text = compact_audit_spec(SPEC_PATH.read_text(encoding="utf-8"))
+    primary_timeout = min(settings.audit_timeout_seconds, PRIMARY_AUDIT_TIMEOUT_SECONDS)
+    client = _openai_client(settings, primary_timeout)
     audit = (
         audit_image_with_chat
         if settings.audit_model_provider == "jdcloud"
         else audit_image
     )
-    return lambda image_path: audit(
-        client,
-        settings.audit_model,
-        image_path,
-        spec_text,
-        reasoning_effort=settings.audit_reasoning_effort,
-        declared_screen_size=declared_screen_size,
-    )
+
+    def run_audit(image_path: Path) -> dict[str, Any]:
+        try:
+            return audit(
+                client,
+                settings.audit_model,
+                image_path,
+                spec_text,
+                reasoning_effort=settings.audit_reasoning_effort,
+                declared_screen_size=declared_screen_size,
+                max_image_side=AUDIT_IMAGE_MAX_SIDE,
+                image_detail="high",
+            )
+        except Exception as exc:
+            if not _is_timeout_error(exc):
+                raise
+
+            fallback_client = _openai_client(
+                settings,
+                _fallback_timeout(settings, primary_timeout),
+            )
+            return audit(
+                fallback_client,
+                settings.audit_model,
+                image_path,
+                spec_text,
+                reasoning_effort=_degraded_reasoning_effort(
+                    settings.audit_reasoning_effort
+                ),
+                declared_screen_size=declared_screen_size,
+                max_image_side=DEGRADED_AUDIT_IMAGE_MAX_SIDE,
+                image_detail="low",
+            )
+
+    return run_audit
 
 
 def _stem(filename: str) -> str:

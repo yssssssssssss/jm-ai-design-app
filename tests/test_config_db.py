@@ -39,6 +39,11 @@ OPTIONAL_ENV = [
     "JDCLOUD_OPENAI_AUDIT_MODEL",
     "JDCLOUD_OPENAI_REASONING_EFFORT",
     "JDCLOUD_OPENAI_TIMEOUT_SECONDS",
+    "SUPERAPI_OPENAI_API_KEY",
+    "SUPERAPI_OPENAI_BASE_URL",
+    "SUPERAPI_OPENAI_AUDIT_MODEL",
+    "SUPERAPI_OPENAI_REASONING_EFFORT",
+    "SUPERAPI_OPENAI_TIMEOUT_SECONDS",
     "SECURE_COOKIES",
     "DATA_DIR",
     "OPENAI_BASE_URL",
@@ -285,6 +290,40 @@ def test_settings_requires_jdcloud_fields_when_provider_is_jdcloud(
         assert "JDCLOUD_OPENAI_AUDIT_MODEL" in str(exc)
     else:
         raise AssertionError("load_settings should require jdcloud fields")
+
+
+def test_settings_loads_superapi_provider(tmp_path, monkeypatch):
+    _set_required_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("AUDIT_MODEL_PROVIDER", "superapi")
+    monkeypatch.setenv("OPENAI_AUDIT_MODEL", "gpt-5.5")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "medium")
+    monkeypatch.setenv("SUPERAPI_OPENAI_API_KEY", "super-key")
+    monkeypatch.setenv("SUPERAPI_OPENAI_BASE_URL", "https://superapi.buzz/v1")
+    monkeypatch.setenv("SUPERAPI_OPENAI_TIMEOUT_SECONDS", "90")
+
+    settings = load_settings()
+
+    assert settings.audit_model_provider == "superapi"
+    assert settings.audit_api_key == "super-key"
+    assert settings.audit_base_url == "https://superapi.buzz/v1"
+    assert settings.audit_model == "gpt-5.5"
+    assert settings.audit_reasoning_effort == "medium"
+    assert settings.audit_timeout_seconds == 90
+
+
+def test_settings_requires_superapi_fields_when_provider_is_superapi(
+    tmp_path, monkeypatch
+):
+    _set_required_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("AUDIT_MODEL_PROVIDER", "superapi")
+
+    try:
+        load_settings()
+    except RuntimeError as exc:
+        assert "SUPERAPI_OPENAI_API_KEY" in str(exc)
+        assert "SUPERAPI_OPENAI_BASE_URL" in str(exc)
+    else:
+        raise AssertionError("load_settings should require superapi fields")
 
 
 def test_init_db_creates_core_tables(tmp_path):

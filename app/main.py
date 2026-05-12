@@ -14,6 +14,7 @@ from app.security import hash_password, new_csrf_token
 
 
 APP_DIR = Path(__file__).resolve().parent
+ROOT_DIR = APP_DIR.parent
 templates = Jinja2Templates(directory=APP_DIR / "templates")
 
 
@@ -38,6 +39,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     app.state.settings = settings
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+    app.mount(
+        "/materials",
+        StaticFiles(directory=ROOT_DIR / "assets" / "spec-materials"),
+        name="materials",
+    )
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.app_secret_key,
